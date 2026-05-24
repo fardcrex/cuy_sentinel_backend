@@ -146,7 +146,7 @@ ON CONFLICT DO NOTHING;
 -- Usuario master por defecto (password: sentinel2025)
 -- Reemplazar el hash con: node -e "require('bcrypt').hash('sentinel2025',10).then(console.log)"
 INSERT INTO users (email, password_hash, display_name, role)
-VALUES ('master@cuy.local', '$2b$10$REEMPLAZAR_CON_HASH_REAL', 'Master Admin', 'master')
+VALUES ('master@cuy.local', '$2b$10$ZMlmwEVIkX5PdkAfIzO7oelCsImr.KFHdaAf3BGpgyACxMNLWAvqC', 'Master Admin', 'master')
 ON CONFLICT (email) DO NOTHING;
 
 -- =============================================================
