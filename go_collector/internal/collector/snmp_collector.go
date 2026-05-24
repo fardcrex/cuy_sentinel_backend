@@ -16,6 +16,7 @@ const (
 	oidHrStorageAlloc = "1.3.6.1.2.1.25.2.3.1.4.1"
 	oidHrMemUsed      = "1.3.6.1.2.1.25.2.3.1.6.2"
 	oidHrMemTotal     = "1.3.6.1.2.1.25.2.3.1.5.2"
+	oidHrMemAllocUnit = "1.3.6.1.2.1.25.2.3.1.4.2"
 )
 
 type SNMPCollector struct{}
@@ -40,7 +41,7 @@ func (c *SNMPCollector) Collect(target SNMPTarget) (Metrics, error) {
 	oids := []string{
 		oidSysUptime, oidIfInOctets, oidIfOutOctets,
 		oidHrStorageUsed, oidHrStorageSize, oidHrStorageAlloc,
-		oidHrMemUsed, oidHrMemTotal,
+		oidHrMemUsed, oidHrMemTotal, oidHrMemAllocUnit,
 	}
 	result, err := g.Get(oids)
 	latencyMs := int(time.Since(start).Milliseconds())
@@ -50,16 +51,31 @@ func (c *SNMPCollector) Collect(target SNMPTarget) (Metrics, error) {
 	}
 
 	m := Metrics{ServiceUp: true, SNMPLatencyMs: latencyMs}
+	var memUsedRaw, memTotalRaw, memAlloc int64
 	for _, pdu := range result.Variables {
 		val := gosnmp.ToBigInt(pdu.Value).Int64()
 		switch pdu.Name {
 		case "." + oidSysUptime:
 			m.UptimeSeconds = val / 100
+		case "." + oidIfInOctets:
+			m.BandwidthInMB = float64(val) / 1_048_576
+		case "." + oidIfOutOctets:
+			m.BandwidthOutMB = float64(val) / 1_048_576
 		case "." + oidHrMemUsed:
-			m.RAMUsageMB = int(val / 1024)
+			memUsedRaw = val
 		case "." + oidHrMemTotal:
-			m.RAMTotalMB = int(val / 1024)
+			memTotalRaw = val
+		case "." + oidHrMemAllocUnit:
+			memAlloc = val
 		}
+	}
+	if memAlloc > 0 {
+		m.RAMUsageMB = int((memUsedRaw * memAlloc) / (1024 * 1024))
+		m.RAMTotalMB = int((memTotalRaw * memAlloc) / (1024 * 1024))
+	} else if memUsedRaw > 0 {
+		// fallback: assume 1KiB allocation units (common on Linux net-snmp)
+		m.RAMUsageMB = int(memUsedRaw / 1024)
+		m.RAMTotalMB = int(memTotalRaw / 1024)
 	}
 
 	var used, size, alloc int64
