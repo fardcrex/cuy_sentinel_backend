@@ -15,6 +15,46 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/users/access-logs?limit=50&userId=<id>
+router.get('/access-logs', requireAuth, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '50'), 200);
+  const { userId } = req.query;
+  try {
+    let query, params;
+    if (userId) {
+      query = `SELECT * FROM user_access_logs WHERE user_id = $1
+               ORDER BY timestamp DESC LIMIT $2`;
+      params = [userId, limit];
+    } else {
+      query = `SELECT * FROM user_access_logs ORDER BY timestamp DESC LIMIT $1`;
+      params = [limit];
+    }
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/users/access-logs
+router.post('/access-logs', requireAuth, async (req, res) => {
+  const { userId, displayName, action, deviceName, devicePlatform } = req.body;
+  if (!userId || !displayName || !action) {
+    return res.status(400).json({ error: 'userId, displayName y action requeridos' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO user_access_logs
+         (user_id, display_name, action, device_name, device_platform, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, displayName, action, deviceName ?? null, devicePlatform ?? null, req.ip]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/users/:id/role
 router.patch('/:id/role', requireAuth, async (req, res) => {
   if (!['admin', 'master'].includes(req.user.role)) {

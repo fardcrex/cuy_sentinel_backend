@@ -163,3 +163,53 @@ $$;
 CREATE OR REPLACE TRIGGER trg_metrics_notify
 AFTER INSERT ON metrics
 FOR EACH ROW EXECUTE FUNCTION notify_new_metric();
+
+-- alert_events INSERT → 'new_alert'
+CREATE OR REPLACE FUNCTION notify_new_alert()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_notify('new_alert', row_to_json(NEW)::text);
+  RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE TRIGGER trg_alert_notify
+AFTER INSERT ON alert_events
+FOR EACH ROW EXECUTE FUNCTION notify_new_alert();
+
+-- collector_runs INSERT → 'new_collector_run'
+CREATE OR REPLACE FUNCTION notify_new_collector_run()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_notify('new_collector_run', row_to_json(NEW)::text);
+  RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE TRIGGER trg_collector_notify
+AFTER INSERT ON collector_runs
+FOR EACH ROW EXECUTE FUNCTION notify_new_collector_run();
+
+-- service_events INSERT → 'new_service_event' (incluye service_name del JOIN)
+CREATE OR REPLACE FUNCTION notify_new_service_event()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  svc_name TEXT;
+BEGIN
+  SELECT service_name INTO svc_name
+    FROM monitored_services WHERE id = NEW.service_id;
+  PERFORM pg_notify('new_service_event', json_build_object(
+    'id',                 NEW.id,
+    'service_id',         NEW.service_id,
+    'event_type',         NEW.event_type,
+    'started_at',         NEW.started_at,
+    'ended_at',           NEW.ended_at,
+    'cause',              NEW.cause,
+    'resolved',           NEW.resolved,
+    'created_at',         NEW.created_at,
+    'monitored_services', json_build_object('service_name', svc_name)
+  )::text);
+  RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE TRIGGER trg_service_event_notify
+AFTER INSERT ON service_events
+FOR EACH ROW EXECUTE FUNCTION notify_new_service_event();

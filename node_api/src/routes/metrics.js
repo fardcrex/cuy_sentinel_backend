@@ -16,15 +16,23 @@ router.get('/latest', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/metrics/:serviceId?limit=50
+// GET /api/metrics/:serviceId?limit=50&from=<iso>&to=<iso>
 router.get('/:serviceId', requireAuth, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit || '50'), 500);
+  const { from, to } = req.query;
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM metrics WHERE service_id = $1
-       ORDER BY collected_at DESC LIMIT $2`,
-      [req.params.serviceId, limit]
-    );
+    let query, params;
+    if (from && to) {
+      query = `SELECT * FROM metrics WHERE service_id = $1
+               AND collected_at BETWEEN $2 AND $3
+               ORDER BY collected_at DESC LIMIT $4`;
+      params = [req.params.serviceId, from, to, limit];
+    } else {
+      query = `SELECT * FROM metrics WHERE service_id = $1
+               ORDER BY collected_at DESC LIMIT $2`;
+      params = [req.params.serviceId, limit];
+    }
+    const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
