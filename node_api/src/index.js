@@ -28,11 +28,12 @@ app.get('/health', (_, res) => res.json({ status: 'ok' }));
 // ─── pg connection (compartida para LISTEN y queries de intervalos) ───────────
 
 const pgCfg = {
-  host:     process.env.PG_HOST     || 'localhost',
-  port:     parseInt(process.env.PG_PORT || '5432'),
-  database: process.env.PG_DATABASE || 'postgres',
-  user:     process.env.PG_USER     || 'app',
-  password: process.env.PG_PASSWORD || 'app_secret_2025',
+  host:                    process.env.PG_HOST     || 'localhost',
+  port:                    parseInt(process.env.PG_PORT || '5432'),
+  database:                process.env.PG_DATABASE || 'postgres',
+  user:                    process.env.PG_USER     || 'app',
+  password:                process.env.PG_PASSWORD || 'app_secret_2025',
+  connectionTimeoutMillis: 3000,
 };
 
 const listenerPool = new Pool(pgCfg);
@@ -97,24 +98,54 @@ async function emitActiveEvents() {
 
 // ─── pg LISTEN/NOTIFY → Socket.IO ────────────────────────────────────────────
 
-listenerPool.connect().then(client => {
-  client.query('LISTEN new_metric');
-  client.query('LISTEN new_alert');
-  client.query('LISTEN new_collector_run');
-  client.query('LISTEN new_service_event');
+let _listenerClient  = null;
+let _reconnectTimer  = null;
 
-  client.on('notification', msg => {
-    const payload = JSON.parse(msg.payload);
-    switch (msg.channel) {
-      case 'new_metric':        io.emit('metric',        payload); break;
-      case 'new_alert':         io.emit('alert',         payload);
-                                emitActiveAlerts();      break;  // refresca lista completa
-      case 'new_collector_run': io.emit('collector_run', payload); break;
-      case 'new_service_event': io.emit('service_event', payload);
-                                emitActiveEvents();      break;  // refresca lista activa
-    }
-  });
-}).catch(err => console.error('LISTEN error:', err.message));
+function scheduleListenerReconnect() {
+  if (_reconnectTimer) return;
+  _reconnectTimer = setTimeout(() => { _reconnectTimer = null; connectListener(); }, 5000);
+}
+
+async function connectListener() {
+  if (_listenerClient) {
+    _listenerClient.removeAllListeners();
+    try { _listenerClient.release(); } catch (_) {}
+    _listenerClient = null;
+  }
+  try {
+    const client = await listenerPool.connect();
+    _listenerClient = client;
+
+    client.on('error', err => {
+      console.error('LISTEN client error:', err.message);
+      scheduleListenerReconnect();
+    });
+
+    await client.query('LISTEN new_metric');
+    await client.query('LISTEN new_alert');
+    await client.query('LISTEN new_collector_run');
+    await client.query('LISTEN new_service_event');
+
+    client.on('notification', msg => {
+      const payload = JSON.parse(msg.payload);
+      switch (msg.channel) {
+        case 'new_metric':        io.emit('metric',        payload); break;
+        case 'new_alert':         io.emit('alert',         payload);
+                                  emitActiveAlerts();      break;
+        case 'new_collector_run': io.emit('collector_run', payload); break;
+        case 'new_service_event': io.emit('service_event', payload);
+                                  emitActiveEvents();      break;
+      }
+    });
+
+    console.log('LISTEN connection established');
+  } catch (err) {
+    console.error('LISTEN connect failed, retrying in 5 s:', err.message);
+    scheduleListenerReconnect();
+  }
+}
+
+connectListener();
 
 // ─── Intervalos server-side (push cada 30 s a todos los clientes) ─────────────
 
