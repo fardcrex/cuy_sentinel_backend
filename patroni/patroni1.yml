@@ -11,18 +11,20 @@ etcd3:
 
 bootstrap:
   dcs:
-    ttl: 30
-    loop_wait: 10
+    ttl: 20
+    loop_wait: 5
     retry_timeout: 10
-    maximum_lag_on_failover: 1048576
+    maximum_lag_on_failover: -1
     postgresql:
       use_pg_rewind: true
+      use_slots: true
       parameters:
         max_connections: 100
         wal_level: replica
         max_wal_senders: 5
         max_replication_slots: 5
         hot_standby: "on"
+        wal_receiver_timeout: 30000
   initdb:
     - encoding: UTF8
     - data-checksums

@@ -292,7 +292,8 @@ watch -n5 'curl -s http://localhost:8009/patroni | jq "{role,state}"'
 
 Esta es la prueba más crítica. Al caer el primary, Patroni promueve automáticamente la réplica como nuevo primary. HAProxy redirige el tráfico al nuevo primary sin cambios de configuración.
 
-> **Importante:** el colector perderá la conexión brevemente durante la elección del nuevo primary (≈10–30 segundos). Esto es normal y esperado.
+> **Importante:** el colector perderá la conexión brevemente durante la elección del nuevo primary (≈20 segundos con la config actual). Esto es normal y esperado.
+> **Requisito:** asegurarse de que ambos nodos aparezcan como `streaming` en `/api/monitoring/db-nodes` antes de iniciar la prueba. Si `state` es `starting`, esperar a que termine la sincronización inicial.
 
 ### Paso 1 — Verificar estado inicial
 
