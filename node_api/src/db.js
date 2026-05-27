@@ -11,4 +11,6 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+pool.on('error', err => console.error('pg pool error:', err.message));
+
 module.exports = pool;

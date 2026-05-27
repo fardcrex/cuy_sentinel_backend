@@ -37,7 +37,10 @@ const pgCfg = {
 };
 
 const listenerPool = new Pool(pgCfg);
-const queryPool    = new Pool(pgCfg);   // pool separado para los intervalos
+const queryPool    = new Pool(pgCfg);
+
+listenerPool.on('error', err => console.error('listenerPool error:', err.message));
+queryPool.on('error',    err => console.error('queryPool error:',    err.message));
 
 // ─── Helpers de emisión server-side ──────────────────────────────────────────
 
