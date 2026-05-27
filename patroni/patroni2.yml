@@ -26,19 +26,10 @@ bootstrap:
   initdb:
     - encoding: UTF8
     - data-checksums
+  post_bootstrap: bash /etc/patroni/post_bootstrap.sh
   pg_hba:
     - host replication replicator 0.0.0.0/0 md5
     - host all all 0.0.0.0/0 md5
-  users:
-    admin:
-      password: admin_pass_2025
-      options:
-        - createrole
-        - createdb
-    app:
-      password: app_secret_2025
-      options:
-        - login
 
 postgresql:
   listen: 0.0.0.0:5432

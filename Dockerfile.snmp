@@ -1,18 +1,11 @@
-FROM ubuntu:22.04
+FROM node:20-alpine
 
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends snmpd && \
-    rm -rf /var/lib/apt/lists/*
+ARG SNMP_PORT=161
+ENV SNMP_PORT=${SNMP_PORT}
 
-# Minimal config: allow read with community "public", expose all MIBs
-RUN printf '\
-rocommunity public\n\
-sysLocation  Docker Mock\n\
-sysContact   ops@cuy-sentinel\n\
-agentAddress udp:161\n\
-view systemonly included .1\n\
-' > /etc/snmp/snmpd.conf
+WORKDIR /app
+COPY snmp_mock/agent.js .
 
-EXPOSE 161/udp
+EXPOSE ${SNMP_PORT}/udp
 
-CMD ["snmpd", "-f", "-Lo", "-c", "/etc/snmp/snmpd.conf"]
+CMD ["node", "agent.js"]

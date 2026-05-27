@@ -1,0 +1,12 @@
+{
+  "name": "cuy-sentinel-node-collector",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "net-snmp": "^3.11.0",
+    "pg": "^8.11.3"
+  }
+}

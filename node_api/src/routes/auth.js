@@ -20,12 +20,9 @@ router.post('/login', async (req, res) => {
     }
     const token = signToken({ id: user.id, email: user.email, role: user.role });
     await pool.query(
-      `INSERT INTO user_access_logs (user_id, display_name, action, ip_address)
-       VALUES ($1, $2, 'login', $3)`,
-      [user.id, user.display_name, req.ip]
-    );
-    await pool.query(
-      'UPDATE users SET last_login = now() WHERE id = $1',
+      `UPDATE users SET last_login = now(),
+                        session_expires_at = now() + interval '8 hours'
+       WHERE id = $1`,
       [user.id]
     );
     res.json({
@@ -40,14 +37,9 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/logout
 router.post('/logout', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT display_name FROM users WHERE id = $1',
-      [req.user.id]
-    );
     await pool.query(
-      `INSERT INTO user_access_logs (user_id, display_name, action, ip_address)
-       VALUES ($1, $2, 'logout', $3)`,
-      [req.user.id, rows[0]?.display_name ?? '', req.ip]
+      'UPDATE users SET session_expires_at = NULL WHERE id = $1',
+      [req.user.id]
     );
     res.json({ ok: true });
   } catch (err) {

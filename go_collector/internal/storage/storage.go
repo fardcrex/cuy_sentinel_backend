@@ -16,8 +16,17 @@ type MetricRecord struct {
 	CollectedAt      time.Time
 }
 
+type CollectorRunRecord struct {
+	StartedAt     time.Time
+	FinishedAt    time.Time
+	ServicesPolled int
+	Success       bool
+	ErrorMessage  string
+}
+
 type Storage interface {
 	SaveMetric(record MetricRecord) error
+	SaveCollectorRun(record CollectorRunRecord) error
 	GetServices() ([]MonitoredService, error)
 	// RecordDown opens a service_events row (event_type='down') if none is open.
 	// Returns the ID of the open event (new or existing).

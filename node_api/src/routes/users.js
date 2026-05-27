@@ -6,7 +6,7 @@ const { requireAuth } = require('../auth');
 router.get('/', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, display_name, role, last_login, created_at
+      `SELECT id, email, display_name, role, last_login, session_expires_at, created_at
        FROM users ORDER BY created_at ASC`
     );
     res.json(rows);

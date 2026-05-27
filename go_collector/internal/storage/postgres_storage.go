@@ -3,9 +3,22 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 )
+
+// retryDelays mirrors the Node collector backoff: 2s→4s→8s→16s→30s×3 (~2 min total).
+var retryDelays = []time.Duration{
+	2 * time.Second,
+	4 * time.Second,
+	8 * time.Second,
+	16 * time.Second,
+	30 * time.Second,
+	30 * time.Second,
+	30 * time.Second,
+}
 
 type PostgresStorage struct {
 	db *sql.DB
@@ -16,10 +29,25 @@ func NewPostgresStorage(dsn string) (*PostgresStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("ping db: %w", err)
+
+	db.SetMaxOpenConns(5)
+	db.SetConnMaxIdleTime(30 * time.Second)
+
+	var lastErr error
+	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		if lastErr = db.Ping(); lastErr == nil {
+			log.Println("db connected")
+			return &PostgresStorage{db: db}, nil
+		}
+		if attempt == len(retryDelays) {
+			break
+		}
+		delay := retryDelays[attempt]
+		log.Printf("db connect attempt %d failed (%v), retrying in %v…", attempt+1, lastErr, delay)
+		time.Sleep(delay)
 	}
-	return &PostgresStorage{db: db}, nil
+	db.Close()
+	return nil, fmt.Errorf("ping db: %w", lastErr)
 }
 
 func (s *PostgresStorage) GetServices() ([]MonitoredService, error) {
@@ -52,6 +80,17 @@ func (s *PostgresStorage) SaveMetric(r MetricRecord) error {
 		r.ServiceID, r.CPUUsagePercent, r.RAMUsageMB, r.RAMTotalMB,
 		r.DiskUsagePercent, r.BandwidthInMB, r.BandwidthOutMB,
 		r.UptimeSeconds, r.ServiceStatus, r.SNMPLatencyMs, r.CollectedAt,
+	)
+	return err
+}
+
+func (s *PostgresStorage) SaveCollectorRun(r CollectorRunRecord) error {
+	errMsg := sql.NullString{String: r.ErrorMessage, Valid: r.ErrorMessage != ""}
+	_, err := s.db.Exec(`
+		INSERT INTO collector_runs
+			(started_at, finished_at, services_polled, success, error_message)
+		VALUES ($1, $2, $3, $4, $5)`,
+		r.StartedAt, r.FinishedAt, r.ServicesPolled, r.Success, errMsg,
 	)
 	return err
 }

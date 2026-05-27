@@ -17,6 +17,7 @@ const (
 	oidHrMemUsed      = "1.3.6.1.2.1.25.2.3.1.6.2"
 	oidHrMemTotal     = "1.3.6.1.2.1.25.2.3.1.5.2"
 	oidHrMemAllocUnit = "1.3.6.1.2.1.25.2.3.1.4.2"
+	oidHrCpuLoad      = "1.3.6.1.2.1.25.3.3.1.2.1"
 )
 
 type SNMPCollector struct{}
@@ -42,6 +43,7 @@ func (c *SNMPCollector) Collect(target SNMPTarget) (Metrics, error) {
 		oidSysUptime, oidIfInOctets, oidIfOutOctets,
 		oidHrStorageUsed, oidHrStorageSize, oidHrStorageAlloc,
 		oidHrMemUsed, oidHrMemTotal, oidHrMemAllocUnit,
+		oidHrCpuLoad,
 	}
 	result, err := g.Get(oids)
 	latencyMs := int(time.Since(start).Milliseconds())
@@ -61,6 +63,8 @@ func (c *SNMPCollector) Collect(target SNMPTarget) (Metrics, error) {
 			m.BandwidthInMB = float64(val) / 1_048_576
 		case "." + oidIfOutOctets:
 			m.BandwidthOutMB = float64(val) / 1_048_576
+		case "." + oidHrCpuLoad:
+			m.CPUUsagePercent = float64(val)
 		case "." + oidHrMemUsed:
 			memUsedRaw = val
 		case "." + oidHrMemTotal:

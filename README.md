@@ -60,13 +60,14 @@ Flutter → Node.js API (:3000) → HAProxy (:5432 writes / :5433 reads)
                                     etcd
                                  (consenso HA)
 
-Go collector → SNMP → Passbolt (:1161) / ChkMonitor (:2161)
-Go collector → HAProxy (:5432) → PostgreSQL
+ collector → SNMP → Passbolt (:1161) / ChkMonitor (:2161)
+ collector → HAProxy (:5432) → PostgreSQL
                 └── metrics (cada 5 min)
                 └── service_events (down / recovered automático)
 ```
 
 El Go collector detecta transiciones de estado:
+
 - Servicio **cae** → abre fila en `service_events` con `event_type = 'down'`
 - Servicio **se recupera** → cierra la fila (`ended_at`) e inserta `event_type = 'recovered'`
 
@@ -180,43 +181,43 @@ curl http://localhost:8008/replica   # 200 → nodo 1 volvió como REPLICA
 
 ## Credenciales
 
-| Servicio | Usuario | Password |
-|---|---|---|
-| PostgreSQL superuser | `postgres` | `postgres_pass_2025` |
-| PostgreSQL app (API + collector) | `app` | `app_secret_2025` |
-| Panel master | `master@cuy.local` | `sentinel2025` |
-| Replicación Patroni | `replicator` | `replicator_pass_2025` |
+| Servicio                         | Usuario            | Password               |
+| -------------------------------- | ------------------ | ---------------------- |
+| PostgreSQL superuser             | `postgres`         | `postgres_pass_2025`   |
+| PostgreSQL app (API + collector) | `app`              | `app_secret_2025`      |
+| Panel master                     | `master@cuy.local` | `sentinel2025`         |
+| Replicación Patroni              | `replicator`       | `replicator_pass_2025` |
 
 ---
 
 ## Puertos expuestos
 
-| Puerto | Servicio |
-|---|---|
-| `3000` | Node.js API (REST + Socket.IO) |
-| `5432` | HAProxy → escrituras → nodo primary |
-| `5433` | HAProxy → lecturas → réplicas |
-| `5434` | Patroni nodo 1 (acceso directo debug) |
-| `5435` | Patroni nodo 2 (acceso directo debug) |
-| `7000` | HAProxy stats dashboard |
-| `8008` | Patroni REST API nodo 1 (`/primary`, `/replica`) |
-| `8009` | Patroni REST API nodo 2 (`/primary`, `/replica`) |
-| `8080` | Passbolt web |
-| `8081` | ChkMonitor web |
-| `1161/udp` | Passbolt SNMP |
-| `2161/udp` | ChkMonitor SNMP |
-| `2379` | etcd client |
+| Puerto     | Servicio                                         |
+| ---------- | ------------------------------------------------ |
+| `3000`     | Node.js API (REST + Socket.IO)                   |
+| `5432`     | HAProxy → escrituras → nodo primary              |
+| `5433`     | HAProxy → lecturas → réplicas                    |
+| `5434`     | Patroni nodo 1 (acceso directo debug)            |
+| `5435`     | Patroni nodo 2 (acceso directo debug)            |
+| `7000`     | HAProxy stats dashboard                          |
+| `8008`     | Patroni REST API nodo 1 (`/primary`, `/replica`) |
+| `8009`     | Patroni REST API nodo 2 (`/primary`, `/replica`) |
+| `8080`     | Passbolt web                                     |
+| `8081`     | ChkMonitor web                                   |
+| `1161/udp` | Passbolt SNMP                                    |
+| `2161/udp` | ChkMonitor SNMP                                  |
+| `2379`     | etcd client                                      |
 
 ---
 
 ## Stack tecnológico
 
-| Componente | Tecnología |
-|---|---|
-| API REST + WebSocket | Node.js 20, Express, Socket.IO |
-| Autenticación | JWT (HS256, 8h), bcrypt |
-| Collector SNMP | Go 1.22, gosnmp |
-| Base de datos | PostgreSQL 15 |
-| Alta disponibilidad BD | Patroni 3.x + etcd 3.5 |
-| Proxy / failover | HAProxy 2.8 |
-| Orquestación | Docker Compose v2 |
+| Componente             | Tecnología                     |
+| ---------------------- | ------------------------------ |
+| API REST + WebSocket   | Node.js 20, Express, Socket.IO |
+| Autenticación          | JWT (HS256, 8h), bcrypt        |
+| Collector SNMP         | Go 1.22, gosnmp                |
+| Base de datos          | PostgreSQL 15                  |
+| Alta disponibilidad BD | Patroni 3.x + etcd 3.5         |
+| Proxy / failover       | HAProxy 2.8                    |
+| Orquestación           | Docker Compose v2              |

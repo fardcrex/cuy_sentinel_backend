@@ -1,6 +1,27 @@
-const router = require('express').Router();
-const pool = require('../db');
+const router  = require('express').Router();
+const http    = require('http');
+const pool    = require('../db');
 const { requireAuth } = require('../auth');
+
+const PATRONI_NODES = [
+  { name: 'patroni1', host: 'patroni1', port: 8008 },
+  { name: 'patroni2', host: 'patroni2', port: 8008 },
+];
+
+function fetchPatroni(host, port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host, port, path: '/patroni', timeout: 3000 }, (res) => {
+      let body = '';
+      res.on('data', (d) => { body += d; });
+      res.on('end', () => {
+        try { resolve({ ok: true, data: JSON.parse(body) }); }
+        catch { resolve({ ok: false }); }
+      });
+    });
+    req.on('error', () => resolve({ ok: false }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
+  });
+}
 
 function toEventRow({ service_name, ...event }) {
   return {
@@ -58,6 +79,31 @@ router.get('/events', requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/monitoring/db-nodes
+router.get('/db-nodes', requireAuth, async (req, res) => {
+  const results = await Promise.all(
+    PATRONI_NODES.map(async ({ name, host, port }) => {
+      const result = await fetchPatroni(host, port);
+      if (!result.ok) {
+        return { name, host, port, reachable: false, role: 'down', state: null, lag: null };
+      }
+      const d = result.data;
+      return {
+        name,
+        host,
+        port,
+        reachable: true,
+        role: d.role,           // 'master' | 'replica' | 'standby_leader' etc.
+        state: d.state,         // 'running' | 'streaming' | etc.
+        lag: d.replication?.[0]?.lag ?? null,
+        timeline: d.timeline,
+        version: d.server_version,
+      };
+    })
+  );
+  res.json(results);
 });
 
 // GET /api/monitoring/collector?limit=50
