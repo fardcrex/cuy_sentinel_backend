@@ -203,13 +203,18 @@ func processService(
 
 	isDown := collectErr != nil || !m.ServiceUp
 
+	var eventErr error
 	if isDown {
-		handleDown(store, svc, collectErr, activeEvents)
+		eventErr = handleDown(store, svc, collectErr, activeEvents)
 	} else {
-		handleRecovered(store, svc, activeEvents)
+		eventErr = handleRecovered(store, svc, activeEvents)
 	}
 
-	return saveMetric(store, svc, m, isDown)
+	metricErr := saveMetric(store, svc, m, isDown)
+	if eventErr != nil {
+		return eventErr
+	}
+	return metricErr
 }
 
 // syncActiveEvent loads the current open event from the DB the first time a
@@ -221,13 +226,15 @@ func syncActiveEvent(store *storage.PostgresStorage, svc storage.MonitoredServic
 	openID, err := store.ActiveEvent(svc.ID)
 	if err != nil {
 		log.Printf("active event %s: %v", svc.Name, err)
+		// Leave the key unset so the next poll retries the DB sync.
+		return
 	}
 	activeEvents[svc.ID] = openID
 }
 
-func handleDown(store *storage.PostgresStorage, svc storage.MonitoredService, collectErr error, activeEvents map[string]string) {
+func handleDown(store *storage.PostgresStorage, svc storage.MonitoredService, collectErr error, activeEvents map[string]string) error {
 	if activeEvents[svc.ID] != "" {
-		return
+		return nil
 	}
 	cause := "SNMP unreachable"
 	if collectErr != nil {
@@ -236,23 +243,25 @@ func handleDown(store *storage.PostgresStorage, svc storage.MonitoredService, co
 	eventID, err := store.RecordDown(svc.ID, cause)
 	if err != nil {
 		log.Printf("record down %s: %v", svc.Name, err)
-		return
+		return err
 	}
 	activeEvents[svc.ID] = eventID
 	log.Printf("⚠ %s DOWN — event %s opened", svc.Name, eventID)
+	return nil
 }
 
-func handleRecovered(store *storage.PostgresStorage, svc storage.MonitoredService, activeEvents map[string]string) {
+func handleRecovered(store *storage.PostgresStorage, svc storage.MonitoredService, activeEvents map[string]string) error {
 	eventID := activeEvents[svc.ID]
 	if eventID == "" {
-		return
+		return nil
 	}
 	if err := store.RecordRecovered(svc.ID, eventID); err != nil {
 		log.Printf("record recovered %s: %v", svc.Name, err)
-		return
+		return err
 	}
 	log.Printf("✓ %s RECOVERED — event %s closed", svc.Name, eventID)
 	activeEvents[svc.ID] = ""
+	return nil
 }
 
 func saveMetric(store *storage.PostgresStorage, svc storage.MonitoredService, m collector.Metrics, isDown bool) error {
